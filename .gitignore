@@ -47,3 +47,18 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Reference material
+reference_material/
+
+# Claude
+CLAUDE.md
+
+# Rproj
+*.Rproj
+
+# renv
+renv/
+
+# Rprofile
+.Rprofile
