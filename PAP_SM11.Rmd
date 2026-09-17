@@ -26,7 +26,6 @@ geometry: margin=0.9in
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
-
 # Abstract
 
 Writing template code is just as much an art as it is a skill, requiring balancing solid starting points with flexibility for custom adaptations. For developers, maintaining templates while ensuring consistency and eliminating repetitive tasks is a constant struggle.
@@ -392,40 +391,42 @@ Whenever specifications are supplied, internal functions  `extract_value_from_sp
 
 # Reflections and Further Work
 
-Looking back, we do not think we could have jumped straight from static templates (Chapter 1) to fully dynamic, DAP-driven generation (Chapter 3) even if we had known from the outset that this was where we would end up. {scriptr}'s chunk/call abstraction had to exist, be trusted by developers, and prove itself on hand-selected templates first, before it was a credible foundation for a tool that selects and assembles chunks *automatically* on a programmer's behalf. Each stage of this journey was also, deliberately, a fully **deterministic** piece of automation: a given DAP specification and a given set of question answers will always produce the same generated script, byte for byte. We think this was the right choice for this problem, precisely because ADaM programming sits inside a heavily regulated, audit-sensitive process where reproducibility and explainability of the generated artefact matter as much as the artefact's correctness. That said, we have not yet rigorously quantified the maintenance-time or error-rate savings this evolution has produced; doing so properly — for example, by comparing defect rates or review turnaround time on studies built from dynamically generated templates against a matched set built from static ones — remains an open piece of further work, and one we would encourage other companies pursuing a similar path to plan for from the start, rather than treating it as an afterthought as we did.
+Looking back, it's clear that `{admiralroche}` could not have jumped straight from static templates (Stage 1) to fully dynamic, specification-driven generation (Chapter 3) even if we as developers had known from the outset that this was where we would end up. `{scriptr}`'s chunk/call abstraction had to exist, be trusted by developers, and prove itself on hand-selected templates first, before it was a credible foundation for a tool that selects and assembles chunks *automatically* on a programmer's behalf. Each stage of this journey was also, deliberately, a fully **deterministic** piece of automation: a given ADaM specification and a given set of question answers will always produce the same generated script, byte for byte. 
 
-Looking forward, we see two natural next steps. The first is incremental: extending {admiralrochetools}'s domain coverage and question sophistication, and continuing to fold learnings from real studies back into the chunk library and question definitions as edge cases surface. The second is more speculative, and is where large language models plausibly enter this pipeline for the first time: today, the DAP-specification-parsing helpers described in Section 6 rely on pattern-matching known phrases in free-text derivation descriptions, which is robust but brittle to phrasing the pattern-matcher was not written to expect. An LLM-based reader of the same free-text specification could plausibly resolve a wider range of phrasing with less maintenance of hand-written patterns, while still leaving the final, deterministic assembly step — the part that actually needs to be reproducible and auditable — entirely in {scriptr}'s hands. We would treat this as an enhancement to the specification-reading step only, not a replacement for the deterministic generation engine underneath it.
+Looking forward, we see two natural next steps. The first is incremental: extending `{admiralrochetools}`'s domain coverage and question sophistication, and continuing to fold learnings from real studies back into the chunk library and question definitions as edge cases surface. The second is more speculative, and is where large language models plausibly enter this pipeline for the first time: today, the specification-parsing helpers described in Stage 3 rely on pattern-matching known phrases in free-text derivation descriptions, which is robust but brittle to phrasing the pattern-matcher was not written to expect. An LLM-based reader of the same free-text specification could plausibly resolve a wider range of phrasing with less maintenance of hand-written patterns, while still leaving the final, deterministic assembly step — the part that actually needs to be reproducible and auditable — entirely in `{scriptr}`'s hands. We would treat this as an enhancement to the specification-reading step only, not a replacement for the deterministic generation engine underneath it.
+
+Finally, a lot of this infrastructure remains hidden to our Roche users behind the `{admiralrochetools}` package. We do see potential avenues that lead to exposing some of it to our more advanced users, allowing them to make their own chunks in order to maintain study-specifics at higher level such as across-molecule or therapuetic area.
 
 # Recommendations
 
-For any organisation considering a similar journey, our main recommendations, in order of how early we think they matter, are:
+For any organisation considering a similar journey, here are our main recommendations as `{admiralroche}`/`{admiralrochetools}` developers.
 
-1. **Do not skip straight to dynamic generation.** Build the reusable-chunk abstraction (`{scriptr}`'s role in our story) first, on a codebase your developers already trust, before trying to automate the selection of chunks. Trust in the underlying building blocks is what makes the final, more automated layer credible.
-2. **Decide submission scope early, and let it drive package boundaries.** Our `{admiralroche}`/`{admiralrochetools}` split (Section 5) happened somewhat after the fact; had we designed for the "does this need to be in a submission's software environment?" question from the start, we could have made that split earlier and more cleanly.
-3. **Make comments and documentation first-class in your assembly engine**, not an afterthought bolted on later. Generated code that a human reviewer cannot understand at a glance will not be trusted, no matter how correct it is.
-4. **Keep the generation step deterministic**, and keep an audit trail of what was asked and answered. Both properties cost little to build in from the start and are expensive to retrofit later, and both matter a great deal in a regulated environment.
-5. **Read your own specifications before asking your programmers anything.** The single biggest reduction in manual effort in our pipeline did not come from generating code faster — it came from not asking a question the DAP specification had already answered.
+1. **Do not skip straight to dynamic generation.** Build the static templates first, before you consider abstraction and automation through something like `{scriptr}`.
+2. **Decide where your code will live early on** The `{admiralroche}`/`{admiralrochetools}` split happened somewhat after the fact; had we designed for the "does this need to be in a submission's software environment?" question from the start, we could have made that split earlier and more cleanly.
+3. **Keep the generation step deterministic**. The nature of ADaM means that you will likely find more success in automating derivations through ideas such as the "chunk library" and dynamically asking users what they require or inferring it from their specifications than attempting to have LLMs generate entire portions of ADaM scripts.
 
 # Conclusion
 
-The journey from static ADaM templates, through `{scriptr}`'s reusable chunk abstraction, to `{admiralrochetools}`'s fully dynamic, specification-driven template generation reflects a fairly ordinary software engineering instinct — notice duplication, abstract it, then automate the selection of the abstraction — applied to a domain, regulated clinical trial programming, where that instinct is not always the first one people reach for. We hope that by setting out both the narrative (in the accompanying talk) and the internal mechanics (in this paper) we have given other sponsor companies a genuine starting point for making the same journey, whether or not they choose the same tools to make it.
+The journey from static ADaM templates, through `{scriptr}`'s reusable chunk abstraction, to `{admiralrochetools}`'s fully dynamic, specification-driven template generation reflects a fairly ordinary software engineering instinct - notice duplication, abstract it, then automate the selection of the abstraction - applied to the regulated clinical programming environemnt, where that instinct is not always the first one programmer have. We hope that by charting `{admiralroche}`'s ADaM template journey, we have provided a genuine starting point for making the same journey, whether or not you choose the same tools to make it.
+
+\newpage
 
 # Acknowledgements
 
-We are especially grateful to Stefan Bundfuss, a lead developer of both `{admiralroche}` and `{scriptr}`, whose design work is the foundation this entire talk and paper describe. We also thank our wider Roche statistical programming community for continuing to build, test and refine the templates and chunk libraries described here.
+We are especially grateful to Stefan Bundfuss, lead developer of both `{admiralroche}` and `{scriptr}`, whose design work is the foundation this entire talk and paper describe. We also thank our wider Roche statistical programming community for continuing to build, test and refine the templates and chunk libraries described here, as well as Roche itself for allowing us to present on the topic.
 
-# CONTACT INFORMATION
+# Contact information
 
 Your comments and questions are valued and encouraged. Contact the authors at:
 
-Gordon Miller
-Roche Products Ltd
-Welwyn Garden City, UK
+Gordon Miller\
+Roche Products Ltd\
+Welwyn Garden City, UK\
 Email: gordon.miller@roche.com
 
-Edoardo Mancini
-Roche Products Ltd
-Welwyn Garden City, UK
+Edoardo Mancini\
+Roche Products Ltd\
+Welwyn Garden City, UK\
 Email: edoardo.mancini@roche.com
 
 Any trademarks mentioned in this paper are the property of their respective owners.
