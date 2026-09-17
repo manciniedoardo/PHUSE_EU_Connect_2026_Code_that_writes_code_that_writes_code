@@ -314,9 +314,13 @@ admiral::use_ad_template(
 
 # Stage 3 - *Code that writes code that writes code* - Dynamic template generation
 
-## From "assemble what a developer selects" to "ask the study what it needs"
+## From "assemble what a developer selects" to "ask the programmer exactly what they need"!
 
-{scriptr} solves the maintenance problem of Chapter 2: a change to shared logic now needs to be made in exactly one chunk, not in twenty templates. But a developer using {scriptr} directly still has to know, for every derivation with more than one valid implementation, which variant this particular study needs, and manually select the right chunks and the right template parameters. {admiralrochetools} closes this final gap by asking the study itself. Every Roche study already has a machine-readable **Data Analysis Plan (DAP) M3 specification** — a structured document (in our case represented as JSON) that records, dataset by dataset and variable by variable, exactly how each ADaM variable should be derived for that study, including the specific sponsor choices (which reference date to use for age, which population definition to use for the intent-to-treat flag, and so on) that Section 3 of this paper described as the genuinely reusable-but-variable middle 10%. {admiralrochetools} reads that specification directly and, wherever it can extract an unambiguous answer from it, uses it; wherever the specification is silent or ambiguous, it asks the programmer a short, targeted question instead.
+`{scriptr}` chunk-based abstract templates improved the maintenance of Roche ADaM templates from a developer perspective. From a user standpoint though, nothing had changed, since the end result of calling `use_ad_template("adxx", package = "admiralrochetools")` was still always the same static ADaM template, which would still need editing in cases where the user chose less popular options for any derivations. In other words, for any given ADaM dataset, there was still no real way to offer *options*.
+
+However, there was scope to go further: the library of chunks in `{admiralrochetools}` already existed, so all that was required was a way for the user to feed instructions to `{admiralrochetools}` about which options they have selected - something like: "I want to build "ADSL" for a randomised study, so I need to use the randomisation date variable `RANDDT`  and I would like the last alive date variable `LSTALVDT` to use any lab, adverse events or disposition records..." - and then `{admiralrochetools}` would cleverly select the right chunks for the specific use-case and provide a *dynamically customised ADaM template* that is as close as possible to the user's needs.
+
+The following section details how we set up dynamic template-creating functions `use_adxx_template()` in `{admiralrochetools}` to accomplish just this goal.
 
 ## Question definitions
 
