@@ -178,66 +178,141 @@ As hinted, the static-template approach was a good starting point, but had no me
 
 `{scriptr}` organises code around two first-class objects, referred to internally as **chunks** and **calls**. A chunk is a general-purpose, reusable block of R code (i.e. anything from a single derivation call to a short multi-line sequence) registered once via `add_chunk()` and retrieved later via `get_chunk()`. A call is the more specialised case of a chunk that wraps exactly one function invocation (typically an `{admiral}` derivation function), registered via `add_call()` and retrieved via `get_call()`. Both chunks and calls can also be registered as *templates* — via `add_chunk_template()` and `add_call_template()` respectively — meaning they contain placeholders to be filled in at assembly time rather than fixed, literal code.
 
-Registered chunks and calls live in an in-memory store attached to the current R session, and `{scriptr}` provides `get_reactable()` to browse the full contents of that store interactively (rendered as a searchable table), which is invaluable when a developer is trying to find out whether a chunk implementing a given piece of logic already exists before writing a new one. Because different packages may want to maintain their own independent chunk libraries, `{scriptr}` supports a **federated store** pattern: `set_scriptr_sources()` lets a downstream package (such as `{admiralrochetools}`, discussed in Section 6) register its own chunk source alongside or instead of the default one, and `get_source_env()` resolves which environment a given lookup should use. 
+```r
+library(scriptr)
+library(admiral)
 
-## Templating syntax
+add_chunk(
+  id = "load_ae",
+  description = "Read the AE SDTM domain",
+  {
+    ae <- read_parquet("data/sdtm/ae.parquet")
+  }
+)
+
+add_call(
+  id = "derive_aendt",
+  description = "Derive the AE end date (AENDT) for a single template",
+  derive_vars_dt(
+    new_vars_prefix = "AEN",
+    dtc = AEENDTC,
+    highest_imputation = "M",
+    date_imputation = "first"
+  )
+)
+```
+
+As written, `derive_aendt` is only useful for the one template that happens to need `AENDTM`/`AENDT` derived with "first"-day imputation - exactly the kind of near-identical, hand-copied block described in Section 5.1. The templating syntax introduced below is what turns a call like this into something reusable across every template that needs the same derivation, with only the details that genuinely differ left open as placeholders.
+
+Registered chunks and calls live in an in-memory store attached to the current R session, and `{scriptr}` provides `get_reactable()` to browse the full contents of that store interactively (rendered as a searchable table), which is invaluable when a developer is trying to find out whether a chunk implementing a given piece of logic already exists before writing a new one. Because different packages may want to maintain their own independent chunk libraries, `{scriptr}` supports a **federated store** pattern: `set_scriptr_sources()` lets a downstream package (such as `{admiralrochetools}`, discussed in Section 6) register its own chunk source alongside or instead of the default one, and `get_source_env()` resolves which environment a given lookup should use. The excerpt below, taken from `{admiralrochetools}`'s own template-generation code, shows this in practice: it points `{scriptr}` at its own package namespace *and* at a private, internal environment holding Roche's confidential chunk and call library, so that the two can be searched together as if they were a single store:
+
+```r
+set_scriptr_sources(list("admiralrochetools", admiralroche_scriptr_private))
+```
+
+## `{scriptr}`'s templating syntax
 
 The templating mechanism is deliberately built on vocabulary borrowed from `{rlang}`'s quasiquotation, since many R developers already have some intuition for it. A chunk or call template can mark a placeholder for single-value substitution with a `++` sigil (mirroring `!!`), and a placeholder for multi-value, "splice in a list" substitution with `+++` (mirroring `!!!`). When a template is instantiated, values are supplied for these placeholders — a single call for a single study parameterisation, or a whole tibble of parameter combinations for row-wise instantiation, which lets a developer generate an entire family of near-identical derivations (for example, one flag derivation per row of a specification table) from a single template definition in a single call.
 
 Two helper functions cover the common cases of building up dynamic text inside a template: `glue_sym()` constructs a syntactically valid R symbol from string fragments (for example, gluing a variable stem and a suffix into a single identifier), while `glue_char()` builds a dynamic character string, and can lean on `{cli}`'s pluralisation helpers so that, for example, a comment can correctly say "the following variable" versus "the following variables" depending on how many were substituted. Where a literal value needs to be inserted as an R string constant or a vector of string constants rather than interpreted, `quote()` and `quotes()` provide convenience wrappers.
 
-## Assembly: from chunks to a finished script
+Returning to the `AENDTM`/`AENDT` example, `derive_aendt` can be rewritten as a call template with two placeholders: `++prefix`, the variable stem shared by the `*ENDTC` source and the derived `*ENDT`/`*ENDTM` pair, and `++imputation`, the one detail that genuinely differs between the `ADCM` and `ADMH` templates. `glue_sym()` builds the `dtc` argument's symbol from `++prefix` at instantiation time, and `defaults` supplies the value used whenever a caller does not override it:
 
-Registering chunks and calls is only half of {scriptr}; the other half is turning a selection of them into an actual, well-formatted R script. `insert_chunks()` takes a list of chunk identifiers (conventionally captured as unevaluated expressions via `exprs()`, so that argument names can double as chunk identifiers) and inlines them, in the order given, into the developing script. `insert_calls()` does the equivalent job for calls, and additionally understands the notion of an "input" and an "output" - letting a developer specify, for instance, that a chain of calls should thread the same dataset through each derivation step in turn, producing a pipe-style sequence rather than a flat list of independent statements. In both cases, ordering is exactly the order supplied by the caller; `{scriptr}` does not attempt to infer dependencies between chunks automatically, which keeps its behaviour predictable and easy to reason about, at the cost of putting the responsibility for correct ordering on whoever is calling it (in practice, either a human developer or, in `{admiralrochetools}`'s case, a purpose-built template generator that already knows the correct domain-specific order).
-
-The top-level entry point that ties this together is `execute()`, which takes an accumulated set of chunk/call insertions together with a target filename and produces a finished `.R` file. Before writing that file, {scriptr} passes the assembled code through {styler}'s `style_code()`, using a house style configuration, so that the generated script is indistinguishable in formatting from one a Roche programmer would have written by hand — consistent indentation, consistent pipe placement, and no tell-tale artefacts of programmatic generation. Figure 4 shows a worked example from the talk of a chunk-based template definition alongside the finished, assembled script it produces.
-
-```{r fig4, fig.cap="A {scriptr}-based template definition (left) and the finished, formatted ADaM script it assembles (right).", out.width="46%", fig.align="center"}
-knitr::include_graphics("figures/slide_12.png")
+```r
+add_call_template(
+  "derive_end_dt",
+  description = "Derive an end date/time from a *ENDTC variable",
+  derive_vars_dt(
+    new_vars_prefix = ++prefix,
+    dtc = glue_sym("{prefix}ENDTC"),
+    highest_imputation = "M",
+    date_imputation = ++imputation
+  ),
+  defaults = list(imputation = "first")
+)
 ```
 
-# WHY TWO PACKAGES? THE {admiralroche}/{admiralrochetools} SPLIT
+A single template definition now serves both templates. `ADCM` uses the default "first"-day imputation and need not mention it at all, while `ADMH` overrides it to "last":
 
-The talk, for the sake of a clean narrative, presents {admiralroche} as the single home for everything Roche-specific. In reality, as {scriptr}-based template assembly matured into the fully dynamic, DAP-driven template generation described in Section 6, the template-generation machinery itself was deliberately moved out of {admiralroche} and into a new, separate package: {admiralrochetools}. This section explains why, since the CLAUDE.md brief for this paper specifically asked us to surface this reasoning, and we think it is a useful data point for other sponsor companies weighing the same decision.
+```r
+insert_calls(
+  input = adcm,
+  ids = exprs(derive_end_dt(prefix = "AEN")),
+  output = adcm
+)
 
-## What the version history says
+insert_calls(
+  input = admh,
+  ids = exprs(derive_end_dt(prefix = "AEN", imputation = "last")),
+  output = admh
+)
+```
 
-{admiralroche}'s own `NEWS.md` documents the split explicitly across two releases. Version 1.6.0 records the initial separation:
+A change to how `AENDTM`/`AENDT` should be derived - a new imputation rule, an extra argument, a bug fix - now only ever needs to be made once, in the `derive_end_dt` template, rather than hunted down across every template file that copied it by hand.
 
-> "The `{admiralroche}` package was split into two packages: `{admiralroche}` and `{admiralrochetools}`... `{admiralroche}` should be included in submission while there is no need to include `{admiralrochetools}`"
+## Assembly: from chunks to a finished script
 
-and by version 1.7.0 the migration was completed:
+Registering chunks and calls is only half of `{scriptr}`; the other half is turning a selection of them into an actual, well-formatted R script. `insert_chunks()` takes a list of chunk identifiers (conventionally captured as unevaluated expressions via `exprs()`, so that argument names can double as chunk identifiers) and inlines them, in the order given, into the developing script. `insert_calls()` does the equivalent job for calls, and additionally understands the notion of an "input" and an "output" - letting a developer specify, for instance, that a chain of calls should thread the same dataset through each derivation step in turn, producing a pipe-style sequence rather than a flat list of independent statements. In both cases, ordering is exactly the order supplied by the caller; `{scriptr}` does not attempt to infer dependencies between chunks automatically, which keeps its behaviour predictable and easy to reason about, at the cost of putting the responsibility for correct ordering on whoever is calling it (in practice, either a human developer or, in `{admiralrochetools}`'s case, a purpose-built template generator that already knows the correct domain-specific order).
 
-> "ADaM templates are no longer provided through `{admiralroche}`. Instead, static and dynamic ADaM templates are now available through the `{admiralrochetools}` package"
+The top-level entry point that ties this together is `execute()`, which takes an accumulated set of chunk/call insertions together with a target filename and produces a finished `.R` file. Before writing that file, {scriptr} passes the assembled code through {styler}'s `style_code()`, using a house style configuration, so that the generated script is indistinguishable in formatting from one a Roche programmer would have written by hand — consistent indentation, consistent pipe placement, and no tell-tale artefacts of programmatic generation.
 
-Along the way, the `use_bds_template()` and `use_occds_template()` generic template functions, and the "Explore ADaM Templates" vignette, all moved from {admiralroche} into {admiralrochetools}. The one sentence in the 1.6.0 note — *"there is no need to include `{admiralrochetools}`"* in a submission — is, in our view, the single most important line in the whole history, and it is worth unpacking why.
+Putting the `load_ae` chunk and the `derive_end_dt` call template from the previous two sections together, generating the relevant section of the `ADCM` template is a single `execute()` call:
 
-## Reason 1: submission scope
+```r
+execute(
+  {
+    insert_chunks(ids = exprs(load_ae))
 
-Every R package used to produce a dataset that is part of a regulatory submission package typically needs to be documented, version-pinned, and in some cases justified to a health authority reviewer as part of that submission's software environment. {admiralroche} contains the actual derivation logic — the {admiral}-based Roche-specific functions that are *executed* when an ADaM dataset is produced — and so, like {admiral} itself, it legitimately belongs in that documented environment. {admiralrochetools}, by contrast, contains only the machinery used to *generate the starting-point template script* for a study, before a programmer has even begun deriving anything. Once a template has been generated, the resulting `.R` script depends only on {admiral} and {admiralroche} to run; {admiralrochetools} plays no further role and need not be installed, let alone documented, in the environment that actually produces submission datasets. Separating the two packages makes this distinction structural rather than a matter of convention that could be forgotten or misapplied on any individual study.
+    adcm <- cm
+    insert_calls(
+      input = adcm,
+      ids = exprs(derive_end_dt(prefix = "AEN")),
+      output = adcm
+    )
+  },
+  filename = "programs/adam/ad_adcm.R"
+)
+```
 
-## Reason 2: package size and dependency footprint
+which writes the following, already-formatted script to `ad_adcm.R`, ready for a programmer to open and continue building on:
 
-The two packages also differ substantially in size and in what they depend on, which is itself a consequence of the different jobs they do. On disk, in our current installed library, {admiralroche} occupies roughly 2.4 MB while {admiralrochetools} occupies roughly 5.2 MB — more than double, despite {admiralrochetools} containing no ADaM derivation logic of its own. That extra weight comes from what dynamic template generation actually requires: {admiralrochetools} needs to depend on {scriptr} for assembly, on YAML- and JSON-handling packages to read question definitions and DAP specifications, and on packages that support building and running an interactive command-line dialogue — none of which {admiralroche} has any reason to depend on, since its job is simply to provide derivation functions that a study's own (already generated) template calls at execution time. Table 1 summarises the practical contrast between the two packages as we currently maintain them.
+```r
+ae <- read_parquet("data/sdtm/ae.parquet")
 
-| | {admiralroche} | {admiralrochetools} |
-|---|---|---|
-| **Purpose** | Roche-specific ADaM derivation functions | Interactive/dynamic ADaM template generation |
-| **License** | Roche internal use only | Apache License (>= 2) |
-| **Installed size** | ~2.4 MB | ~5.2 MB |
-| **Depends on `{scriptr}`?** | No | Yes |
-| **Include in a regulatory submission?** | Yes | No |
-| **Used when?** | Every time an ADaM dataset is programmed | Once, at the start of a study, to generate the template |
+adcm <- cm
+adcm <- admcm %>%
+  derive_vars_dt(
+    new_vars_prefix = "AEN",
+    dtc = AEENDTC,
+    highest_imputation = "M",
+    date_imputation = "first"
+  )
+```
 
-: Table 1. A practical contrast between {admiralroche} and {admiralrochetools}.
+The equivalent call for `ADMH` differs only in the arguments passed to `derive_end_dt()`, yet both scripts are generated from the same underlying chunk and call template — precisely the "write it once, generate it everywhere" property that static templates could not offer. Figure 4 shows a further worked example from the talk of a chunk-based template definition alongside the finished, assembled script it produces.
 
-Interestingly, the two packages' license fields also diverge in a way that mirrors this reasoning: {admiralroche}'s `LICENSE` file states simply "For Roche internal use only," reflecting that its derivation logic encodes Roche-specific, potentially business-sensitive interpretation choices, whereas {admiralrochetools} is licensed under the Apache License (>= 2), leaving the door open to sharing the *general-purpose* pattern of DAP-driven interactive template generation more broadly — while its actual chunk library, of course, still lives behind Roche's internal chunk-store configuration.
+# Creating a new `{admiralrochetools}` package to the store template machinery
 
-## Reason 3: separation of concerns for maintenance
+Once the `{scriptr}` machinery was in place to help abstract and generalise the `{admiralroche}` ADaM templates, a decision was made to split `{admiralroche}` into two:
 
-A more mundane but no less real motivation is ordinary software engineering hygiene. {admiralroche}'s test suite is concerned with whether a given derivation function produces the correct ADaM values for known inputs — a well-defined, largely deterministic testing problem well served by the same `{admiral}`-style unit-testing conventions the rest of the pharmaverse uses. {admiralrochetools}'s test suite is concerned with a different, messier problem: whether a CLI dialogue asks the right question given a particular DAP specification, whether a malformed or ambiguous specification is handled gracefully, and whether the assembled output is syntactically and semantically correct R. Keeping these two very different testing surfaces in two separate packages, each releasing on its own cadence, has made both easier to maintain than a single combined package would have been — a smaller, more focused package is a smaller, more focused thing to reason about, review, and release.
+- `{admiralroche}` would retain the Roche-specific derivation functions and their documentation
+- A new `{admiralrochetools}` package was created to house all the machinery for the ADaM templates.
 
-# CHAPTER 3: CODE THAT WRITES CODE THAT WRITES CODE — DYNAMIC TEMPLATE GENERATION
+The main reason behind this split was of a regulatory nature. Any Roche regulatory submission of R code requires the `{admiralroche}` package to be submitted too, in order for the ADaM programs to be readable. However, there is no need to submit the ADaM templates, nor the machinery used to create them, since once the code has been generated, the templates are no longer used in the ADaM derivation process. Moving the machinery to `{admiralrochetools}` meant future submissions would not need to include this package, reducing the size of the submission and the number of packages that need to be documented.
+
+From a user perspective, the only difference was that the `package` argument to `use_ad_template()` needed to be updated to point at `{admiralrochetools}` instead of `{admiralroche}`:
+
+```r
+library(admiral)
+library(admiralrochetools)
+
+admiral::use_ad_template(
+  "adsl",
+  package = "admiralrochetools"
+)
+```
+
+# Stage 3 - *Code that writes code that writes code* - Dynamic template generation
 
 ## From "assemble what a developer selects" to "ask the study what it needs"
 
