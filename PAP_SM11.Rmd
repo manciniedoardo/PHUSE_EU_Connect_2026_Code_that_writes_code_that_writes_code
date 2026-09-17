@@ -12,6 +12,8 @@ output:
     toc: false
     number_sections: true
     fig_caption: true
+    includes:
+      in_header: preamble.tex
   html_document:
     toc: true
     toc_depth: 2
@@ -38,8 +40,9 @@ We will discuss our challenges and learnings, sharing metrics on reduced mainten
 The `{admiral}` package and its wider "pharmaverse" ecosystem [pharmaverse.org] are the **de facto** standard tools to create Analysis Data Model (ADaM) datasets in R. `{admiral}` deliberately does not attempt to be a complete, drop-in solution; rather, it provides composable, reusable derivation functions and leaves the programmer to decide *which* functions to use, *how* to use them, *in what order* to do so, and most importantly, *where* to intersperse sponsor/study-specific code. This is by design, since the fine details of how any given company or study implements the ADaM standards inevitably vary.
 
 This paradigm has led some sponsors to build company-specific extensions on top of `{admiral}`, which can both:
-* Provide custom functions to implement company-specific derivation choices;
-* Make available a library of ADaM template scripts that implement those choices in a consistent, repeatable way.
+
+- Provide custom functions to implement company-specific derivation choices;
+- Make available a library of ADaM template scripts that implement those choices in a consistent, repeatable way.
 
 For a presentation and paper discussing Roche's own journey setting up `{admiralroche}`, the interested reader can consult Ross Farrugia's **"OS05: {admiral} – From Open Source Through to Company Implementation"** [presentation](https://phuse.s3.eu-central-1.amazonaws.com/Archive/2024/Connect/US/Bethesda/PRE_OS05.pdf) and [paper](https://phuse.s3.eu-central-1.amazonaws.com/Archive/2024/Connect/US/Bethesda/PAP_OS05.pdf) from the PHUSE US Connect 2024 conference. Building on this material, this paper and the talk it accompanies tell the story of how the way we provide ADaM template scripts through `{admiralroche}` has evolved over time, moving through three distinct stages that give the talk its title:
 
@@ -47,19 +50,97 @@ For a presentation and paper discussing Roche's own journey setting up `{admiral
 2. **Code that writes code.** An internal R package, `{scriptr}`, that abstracts the common building blocks shared across those templates into reusable, parameterised "chunks" which are then assembled programmatically rather than copy-pasted.
 3. **Code that writes code that writes code.** A companion package, `{admiralrochetools}`, that combines `{scriptr}`'s assembly engine with a short interactive questionnaire and a study's own specification, so that running a single function produces a template already tailored to that study's derivation choices, with no manual search-and-replace required.
 
-# BACKGROUND: {admiral}, COMPANY EXTENSIONS, AND THE 80/10/10 RULE
+# BACKGROUND: WHY {admiralroche}, AND WHY ADaM TEMPLATES?
 
-The pharmaverse family of packages exists because CDISC's ADaM Implementation Guide specifies *what* an analysis dataset must contain, but not the exact R code that produces it. {admiral} fills that gap with a toolbox of standard, reusable derivation functions — `derive_vars_dt()`, `derive_vars_merged()`, `derive_param_exist_flag()`, and so on — that can be composed, in any order, into a full ADaM programming pipeline. As Farrugia describes it, once {admiral} reached its 1.0.0 milestone at the end of 2023, sponsor companies needed a place to put the code that {admiral} intentionally does not provide: "we kept in mind the 80/20 rule... in our case at Roche this was creating the closed source `{admiralroche}` package" [OS05]. The same logic produced therapeutic-area extensions such as {admiralonco}, {admiralophtha} and {admiralvaccine} for cross-company standard practices in specific indications, and company extensions such as {admiralroche} for Roche-specific interpretation choices.
+## {admiralroche} covers the ~10% of Roche's ADaM standards that {admiral} does not
 
-In the talk, we refine that 80/20 split into an 80/10/10 split, illustrated in Figure 1. The bulk of any ADaM pipeline (roughly 80%) is genuinely standard {admiral} code that every sponsor can share as-is. A further 10% is Roche-specific but genuinely reusable across studies — sponsor variable and parameter conventions, house imputation rules, integration glue for other pharmaverse packages — and this is exactly what {admiralroche} exists to hold. The final 10% is specific to an individual study or molecule and is not, and should not be, standardised into any shared package at all.
-
-```{r fig1, fig.cap="The 80/10/10 split between shared {admiral} code, reusable Roche-specific code held in {admiralroche}, and genuinely study-specific code.", out.width="42%", fig.align="center"}
-knitr::include_graphics("figures/slide_05.png")
+```{r fig1, echo=FALSE, results="asis", fig.cap="The 80/10/10 split between shared {admiral} code, the sponsor-interpretation slice covered by {admiralroche}, and genuinely study-specific code."}
+if (knitr::is_latex_output()) {
+  cat(
+    "\\begin{wrapfigure}{r}{0.36\\textwidth}\n",
+    "\\centering\n",
+    "\\includegraphics[width=0.34\\textwidth]{figures/pie_chart.png}\n",
+    "\\caption{Code split across ADaM programs at Roche}\n",
+    "\\end{wrapfigure}\n"
+  )
+} else {
+  knitr::include_graphics("figures/pie_chart.png")
+}
 ```
 
-This framing matters for everything that follows, because both {scriptr} and {admiralrochetools} exist purely to make that middle 10% — the {admiralroche} slice — easier to maintain and easier to apply consistently. Neither tool touches the top slice ({admiral} itself) or the bottom slice (bespoke study code); they are entirely about how efficiently Roche can produce and keep in sync the company-specific layer in between.
+Heuristically, it has been observed that for most given ADaM datasets at Roche (and most likely for other sponsors too), around 80% of the variable and parameter derivations are covered by functions from the `{admiral}` package, such as `derive_vars_dt()`, `derive_vars_merged()`, `derive_param_exist_flag()`. A further ~10% is manually programmed code that is genuinely specific to an individual study, and has no business being standardised into any shared package. The remaining ~10% is where `{admiralroche}` comes in: it reflects Roche's own interpretation of the ADaM standards, for example, which imputation techniques to apply, sponsor-specific variables and parameters, helper code to interact with Roche's chosen statistical computing environment (SCE), and glue code for other pharmaverse packages such as `{metatools}`, `{metacore}` and `{xportr}` which Roche has chosen to use as part of its ADaM pipeline.
 
-It is also worth noting, since it does not appear elsewhere in the talk, that {admiralroche}'s implementation choices are not arbitrary: each {admiralroche} release states in its `NEWS.md` file which version of Roche's internal GDSR Clinical Data Standards specification it implements, identified by a quarterly release codename (recent examples include "Janus," "Savannah," "Ash" and "Bamboo"). This gives {admiralroche} a direct, versioned traceability link back to the standards documents that govern Roche's ADaM conventions — a detail that matters a great deal when a reviewer, auditor, or new team member asks "why does {admiralroche} do it this way?"
+## Accessing ADaM templates
+
+Even before any sponsor extension enters the picture, `{admiral}` already makes starting a new ADaM program straightforward, via `use_ad_template()`. Calling it with a domain name and `package = "admiral"` generates a ready-made, generic template script for that domain directly into the user's project:
+
+```r
+library(admiral)
+
+admiral::use_ad_template(
+  "adsl",
+  package = "admiral"
+)
+```
+
+However, these templates are simply generic starting points. As mentioned in the previous section, most sponsors will likely wish to provide more customised templates which are closer to their implementation of ADaM standards, work better within their SCE, etc. If a sponsor has created a sponsor-specific extension package like `{admiralroche}`, they can distribute their own versions of ADaM templates by leveraging the same `use_ad_template()` function and updating the `package` argument.
+
+```r
+library(admiral)
+library(admiralroche)
+
+admiral::use_ad_template(
+  "adsl",
+  package = "admiralroche"
+)
+```
+
+## Features of sponsor ADaM templates
+
+As expected, `{admiralroche}`'s ADaM templates showcase a healthy mix of standard `{admiral}` code customised to fit Roche's requirements, calls to `{admiralroche}` functions, and placeholders for study-specific code. Below are examples of each from the `ADSL` template.
+
+Helper code to read in data cut date:
+```r
+## Datacut date ----
+# Get cut-off date from ATLAS activity.json meta file
+activity_json <- read_json("metadatain/atlas/activity.json")
+cut_date <- activity_json$activity_ccod
+# pass in datacut date (in form as.Date("2020-12-31") for example)
+adsl_dcut <- dm %>%
+  # datacut date (DCUTDT)
+  mutate(DCUTDT = as.Date(cut_date))
+```
+
+Leveraging an `{admiral}` function but using Roche-specific arguments to ferive treatment start date:
+```r
+  # treatment start date (TRTSDTM)
+  derive_vars_merged(
+    dataset_add = ex_ext,
+    filter_add = (EXDOSE > 0 | (EXDOSE == 0 & str_detect(EXTRT, "PLACEBO"))) &
+      !is.na(EXSTDTM),
+    new_vars = exprs(TRTSDTM = EXSTDTM),
+    order = exprs(EXSTDTM, EXSEQ),
+    mode = "first",
+    by_vars = get_admiral_option("subject_keys")
+  ) %>%
+```
+
+Using `{admiralroche}`-specific functions to derive Roche ADaM variables:
+```r
+  # age group 1 (AGEGR1)
+  admiralroche::derive_var_agegr1() %>%
+  # age group 2 (AGEGR2)
+  admiralroche::derive_var_agegr2() %>%
+```
+
+Study-specific treatment arm derivation placeholders:
+```r
+  # treatment variables (TRT01P/TRT01A)
+  mutate(
+    TRT01P = ARM,
+    TRT01A = ACTARM
+  ) %>%
+```
 
 # CHAPTER 1: CODE — STATIC ADaM TEMPLATES
 
