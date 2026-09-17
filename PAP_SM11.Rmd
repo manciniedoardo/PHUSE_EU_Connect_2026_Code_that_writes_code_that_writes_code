@@ -27,7 +27,7 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
 
-# ABSTRACT
+# Abstract
 
 Writing template code is just as much an art as it is a skill, requiring balancing solid starting points with flexibility for custom adaptations. For developers, maintaining templates while ensuring consistency and eliminating repetitive tasks is a constant struggle.
 
@@ -35,7 +35,7 @@ Over the past years, Roche's fast transition to R for ADaM programming challenge
 We will discuss our challenges and learnings, sharing metrics on reduced maintenance and time saved. Join us to see why, in the quest for the ultimate ADaM template, deterministic automation trumps probabilistic AI.
 
 
-# INTRODUCTION
+# Introduction
 
 The `{admiral}` package and its wider "pharmaverse" ecosystem [pharmaverse.org] are the **de facto** standard tools to create Analysis Data Model (ADaM) datasets in R. `{admiral}` deliberately does not attempt to be a complete, drop-in solution; rather, it provides composable, reusable derivation functions and leaves the programmer to decide *which* functions to use, *how* to use them, *in what order* to do so, and most importantly, *where* to intersperse sponsor/study-specific code. This is by design, since the fine details of how any given company or study implements the ADaM standards inevitably vary.
 
@@ -50,11 +50,11 @@ For a presentation and paper discussing Roche's own journey setting up `{admiral
 2. **Code that writes code.** An internal R package, `{scriptr}`, that abstracts the common building blocks shared across those templates into reusable, parameterised "chunks" which are then assembled programmatically rather than copy-pasted.
 3. **Code that writes code that writes code.** A companion package, `{admiralrochetools}`, that combines `{scriptr}`'s assembly engine with a short interactive questionnaire and a study's own specification, so that running a single function produces a template already tailored to that study's derivation choices, with no manual search-and-replace required.
 
-# BACKGROUND: WHY {admiralroche}, AND WHY ADaM TEMPLATES?
+# Background: Why {admiralroche} and ADaM templates?
 
 ## {admiralroche} covers the ~10% of Roche's ADaM standards that {admiral} does not
 
-```{r fig1, echo=FALSE, results="asis", fig.cap="The 80/10/10 split between shared {admiral} code, the sponsor-interpretation slice covered by {admiralroche}, and genuinely study-specific code."}
+```{r fig1, echo=FALSE, results="asis", fig.cap="Code split across ADaM programs at Roche"}
 if (knitr::is_latex_output()) {
   cat(
     "\\begin{wrapfigure}{r}{0.36\\textwidth}\n",
@@ -142,25 +142,33 @@ Study-specific treatment arm derivation placeholders:
   ) %>%
 ```
 
-# CHAPTER 1: CODE — STATIC ADaM TEMPLATES
+# Stage 1: *Code* - static ADaM templates
 
-The starting point for any {admiral}-based pipeline, at Roche or anywhere else, is a template: a plain R script that chains together the {admiral} derivation functions needed to build one ADaM dataset, in the right order, with the right variables. {admiral} itself ships generic templates via `admiral::use_ad_template()`, and {admiralroche} historically extended this pattern with its own, Roche-flavoured static templates — one script per domain (ADSL, ADAE, ADLB, and so on), each hard-coding Roche's standard interpretation of that domain's derivations. A programmer starting a new study would call the appropriate `use_*_template()` function, receive a copy of the relevant script in their project, and edit it by hand to fit the study at hand. Figure 2 shows a representative excerpt of one such template, annotated to show how {admiral} derivation calls, Roche-specific helper logic, and ordinary R plumbing sit side by side in the same script.
+Throughout its first releases, `{admiralroche}` put the `use_ad_template()` mechanism introduced in Section 3 to direct use: it shipped a static, human-written ADaM template script for every domain covered by Roche's global standards - `ADSL`, `ADAE`, `ADVS`, `ADLB`, and so on — each one hard-coding Roche's standard interpretation of that domain's derivations and mixing together the `{admiral}` calls, `{admiralroche}` helper functions, and study-specific placeholders illustrated in Section 3.3. A programmer starting a new study would call the appropriate `use_*_template()` function, receive a copy of the relevant script in their project, and edit it by hand to fit the study at hand.
 
-```{r fig2, fig.cap="An excerpt of a static ADaM template, mixing {admiral} derivation calls with Roche-specific logic.", out.width="45%", fig.align="center"}
-knitr::include_graphics("figures/slide_07.png")
+## Pros and cons of the static template approach
+
+This approach was the simplest possible way to package company-specific ADaM logic, and its strengths followed directly from that simplicity:
+
+- **Simple to maintain for developers.** A template was just a plain R script; adding or updating one required no tooling beyond an editor and `{admiralroche}`'s usual code review process.
+
+- **Simple for users to access and use.** A single call to `use_ad_template("<adam_name>", package = "admiralroche")` was all a programmer ever needed to retrieve a Roche-specific starting point.
+
+- **The easiest way to initially set up {admiralroche}.** Static templates let the package reach its first users quickly, without first having to design any abstraction layer.
+
+The cost of that simplicity, however, grew with the size of the template library:
+
+- **Difficult to cater for many different options, especially if complex.** Each template hard-coded one interpretation of a derivation - usually the most popular one from Roche's global standards. User who needed a different option had to find and edit the relevant lines by hand, with limited guidance in the form of a comment to help guide the way.
+
+- **Duplication of code for sections common to all templates.** By the time `{admiralroche}` had accumulated more than twenty ADaM templates, several recurring patterns, for example, the logic for deriving `AENDTM`/`AENDT` consistently across the ADCM and ADMH templates, or standard subject-level flag derivations repeated across nearly every template, existed as near-identical, hand-copied blocks of code in many files at once.
+
+```{r fig2, fig.cap="Duplication risks and comments pointing users towards potential updates.", out.width="70%", fig.align="center"}
+knitr::include_graphics("figures/duplication_risks.png")
 ```
 
-This approach is the simplest possible way to package company-specific ADaM logic, and for a small template library it works well. Figure 3 summarises its strengths and weaknesses as we experienced them in practice.
+This second point turned out to be the more serious limitation in practice. Any refactor, bug fix, or change in a Roche standard had to be propagated by hand into every template that contained the affected block, and so there was always a risk that a fix may land in some templates but be missed in others. 
 
-```{r fig3, fig.cap="Pros and cons of the static template approach.", out.width="45%", fig.align="center"}
-knitr::include_graphics("figures/slide_09.png")
-```
-
-On the plus side, static templates are the easiest thing to build, the easiest thing to explain to a new team member, and the easiest thing to browse when you just want to see what a "normal" ADSL derivation looks like at Roche. There is no indirection: what you read in the template file is exactly the code that will run.
-
-The cost of that simplicity, however, grows with the size of the template library. By the time {admiralroche} had accumulated more than twenty domain templates, several recurring patterns — for example, the logic for deriving `AENDTM`/`AENDT` consistently across the ADCM and ADMH templates, or standard subject-level flag derivations repeated across nearly every template — existed as near-identical, hand-copied blocks of code in many files at once. Any refactor, bug fix, or change in a Roche standard had to be propagated by hand into every template that contained the affected block, and it was entirely possible for a fix to land in some templates but be missed in others. This is not a hypothetical concern: as one of us described in an earlier PHUSE paper about maintaining {admiral} itself, a single upstream change — the deprecation of `dplyr::vars()` in favour of `rlang::exprs()` — "necessitated updates to 215 {admiral} files, including templates, unit tests and documentation" [OS07]. That was a change to the core package, made once by its maintainers; a change to a Roche-specific pattern duplicated across twenty company templates has no equivalent single point of control, and it was exactly this asymmetry that motivated the next stage of the story.
-
-# CHAPTER 2: CODE THAT WRITES CODE — ABSTRACTING TEMPLATES WITH {scriptr}
+# Stage 2: *Code that writes code* - Abstracting away the ADaM templates
 
 ## The problem: duplication without a shared abstraction
 
