@@ -280,7 +280,7 @@ which writes the following, already-formatted script to `ad_adcm.R`, ready for a
 ae <- read_parquet("data/sdtm/ae.parquet")
 
 adcm <- cm
-adcm <- admcm %>%
+adcm <- adcm %>%
   derive_vars_dt(
     new_vars_prefix = "AEN",
     dtc = AEENDTC,
@@ -322,71 +322,97 @@ However, there was scope to go further: the library of chunks in `{admiralrochet
 
 The following section details how we set up dynamic template-creating functions `use_adxx_template()` in `{admiralrochetools}` to accomplish just this goal.
 
-## Question definitions
+## Worked example: `use_adsl_template()`
 
-Each ADaM domain admiralrochetools supports (at the time of writing: ADSL, ADAE, ADEG, ADEX, ADHY, ADLB, ADRS, ADTTE and ADVS) has an accompanying YAML file of question definitions, one entry per decision point the template generator needs resolved. Each entry specifies the question text to show the programmer, the valid answer options, a rule for deriving a *default* answer directly from the DAP M3 specification text (so that, whenever possible, the programmer is never asked something the specification already answers), and free-text notes. A representative excerpt from the ADSL question file illustrates the pattern:
+Every ADaM domain for which `{admiralrochetools}` has made available dynamic template functions (at the time of writing: `ADSL`, `ADAE`, `ADEG`, `ADEX`, `ADHY`, `ADLB`, `ADRS`, `ADTTE` and `ADVS`) has its own `use_adxx_template()` function. We will take `use_adsl_template()` as a running example for the rest of this section: calling it with nothing more than a destination path is enough to trigger the full question-and-answer session that ends with a study-specific `ADSL` template being written to disk.
 
-```yaml
-- Question: Which subjects do you want to consider for the derivation of `ITTFL`?
-  Options: '`"randomized"`, `"enrolled"`'
-  Default_from_DAP_M3: >
-    `"randomized"` if the `ITTFL` derivation contains the text
-    `"[DS.DSDECOD] = 'RANDOMIZED'"`, `"enrolled"` otherwise
-  Notes: ""
+```r
+library(admiralrochetools)
+
+use_adsl_template(
+  filename = "programs/adam/ad_adsl.R"
+)
 ```
 
-Resolving that default requires matching against the free-text derivation description in the DAP specification, which {admiralrochetools} does with a small family of specification-parsing helpers: `reduce_json()` narrows the full study specification down to the section relevant to the dataset currently being generated, `extract_value_from_specs()` and `extract_multi_match_from_specs()` pattern-match specific keywords or phrases within a variable's derivation text to resolve a default answer (as in the `ITTFL` example above), and `get_var_specs()`/`get_required_vars()` pull out a variable's full metadata and requiredness flags respectively. Where the specification does not resolve a question, the programmer is prompted interactively; `get_input_info()` orchestrates this end-to-end, falling back to simple `read_user_input()`/`read_user_choice()` prompts validated by small acceptor functions such as `accept_integer()` or `accept_integer_list()`, so that, for example, a question expecting a positive integer cannot be answered with free text. Figure 5 shows this dialogue from the talk's worked LSTALVDT example.
+For every Roche derivation where more than one implementation option is permitted by the Roche ADaM standards, this call raises an interactive prompt built from a small family of CLI helper functions. `read_user_choice()` renders a titled list of options and reads back the programmer's selection, optionally allowing several options to be picked at once (`multiple_values = TRUE`) or a shortcut for "all of them" (`allow_all = TRUE`); `read_user_input()`, paired with a validator such as `accept_integer()` or `accept_integer_list()`, is used instead whenever the answer is a number rather than a choice from a fixed list (for example, the number of study drugs feeding into `AEWITHFL`), immediately re-prompting the programmer if the typed value fails validation.
 
-```{r fig5, fig.cap="The interactive question-and-answer dialogue for a dynamically generated template, with defaults resolved from the study's DAP M3 specification where possible.", out.width="46%", fig.align="center"}
-knitr::include_graphics("figures/slide_15.png")
+A concrete illustration is the intent-to-treat flag, `ITTFL`. Roche's global standards allow it to be derived either against subjects who were *randomized* or against subjects who were simply *enrolled*, and `use_adsl_template()` raises exactly this choice as one of its questions:
+
+```
+Which subjects do you want to consider for the derivation of ITTFL?
+
+1: randomized [default]
+2: enrolled
+
+Selection:
 ```
 
-## From answers to an assembled template
+The answer changes the `condition` argument of the `derive_var_merged_exist_flag()` call that `{scriptr}` inserts into the finished script. Accepting the default of "randomized" produces:
 
-Once every question for a domain has been resolved — whether from the specification directly or from the programmer's answers — {admiralrochetools} calls into its own {scriptr}-based chunk library (registered as a federated {scriptr} source specific to this package, as described in Section 4) to assemble the finished template, using top-level entry points such as `create_adam()` and `add_subject_keys()` as the backbone that each domain-specific `use_*_template()` function builds on. Because the chunk library was designed from the outset to cover every option the question files can produce an answer for, the resulting script is not a generic skeleton requiring manual completion, but a fully worked, study-specific template — indistinguishable, in the finished code, from what a Roche programmer would have written by hand for that exact set of derivation choices. Figure 6 shows the complete worked example from the talk: the LSTALVDT (last known alive date) derivation, assembled automatically from the programmer's answers to a handful of short questions.
-
-```{r fig6, fig.cap="The assembled LSTALVDT derivation, generated automatically from the answers gathered in Figure 5.", out.width="46%", fig.align="center"}
-knitr::include_graphics("figures/slide_16.png")
+```r
+# ITT population (ITTFL)
+derive_var_merged_exist_flag(
+  dataset_add = ds,
+  by_vars = get_admiral_option("subject_keys"),
+  new_var = ITTFL,
+  condition = DSDECOD == "RANDOMIZED" & !is.na(DSSTDTC),
+  false_value = "N",
+  missing_value = "N"
+)
 ```
 
-## An audit trail for free
+while choosing "enrolled" produces the same call with only the `condition` argument swapped:
 
-A detail not shown on the slides but worth recording here: every dynamic template-generation session writes an "info file" recording exactly which questions were asked, what the programmer (or the DAP specification) answered, and which package versions produced the result, via `start_input_tracking()`/`stop_input_tracking()`. This was not a strict requirement when the feature was built, but it has turned out to be a genuinely useful side effect: it gives programmers, reviewers and QC staff downstream a durable record of *why* a generated template looks the way it does, months after the fact, without anyone having had to remember to write that justification down by hand.
+```r
+# ITT population (ITTFL)
+derive_var_merged_exist_flag(
+  dataset_add = ds,
+  by_vars = get_admiral_option("subject_keys"),
+  new_var = ITTFL,
+  condition = DSDECOD == "ENROLLED" & !is.na(DSSTDTC),
+  false_value = "N",
+  missing_value = "N"
+)
+```
 
-## A living tool: version history
+Every other optional `ADSL` derivation - which reference date to age at, whether an interim analysis data-cut date is required, which sources feed into last known alive date (`LSTALVDT`) - is resolved through the same call-and-response mechanism, with `read_user_choice()`'s `multiple_values` option letting a programmer pick several sources at once where more than one applies. 
 
-{admiralrochetools} has itself evolved quickly since its first release. Version 0.1.0 ("Savannah") launched with dynamic generation support for five domains — ADSL, ADAE, ADLB, ADRS and ADTTE. Version 0.1.1 ("Ash") added ADVS support and switched the source of a study's data-cut date configuration to a newer internal activity-tracking format. Version 0.2.0 ("Bamboo"), the version installed at the time of writing, added ADEX, ADHY and ADEG, bringing the total to eight domain-specific generators, alongside the more general `use_bds_template()` and `use_occds_template()` functions inherited from {admiralroche} in the 1.6.0 split described in Section 5. This cadence — a new domain or two roughly every quarter, tracking the same GDSR release-train codenames used by {admiralroche} itself — gives us reasonable confidence that dynamic generation will, in time, cover the full set of ADaM domains Roche studies routinely need.
+## Feeding in a specification instead of answering every question
 
-# REFLECTIONS AND FURTHER WORK
+Asking a programmer a question their study's own specification has already answered is a wasted effort, so `use_adsl_template()` (and its sibling `use_*_template()` functions) accepts an optional specification argument, `dap_m3` (DAP M3 short for "Data Analysis Plan, Module 3", a.k.a. the ADaM specifications). These are expected in JSON format.
+
+```r
+use_adsl_template(
+  filename = "programs/adam/ad_adsl.R",
+  dap_m3 = "metadatain/adam/my_specs.JSON"
+)
+```
+
+Whenever specifications are supplied, internal functions  `extract_value_from_specs()` and `extract_multi_match_from_specs()` scan the free-text derivation description for each variable to try to infer an answer directly from it using keyword-matching techniques. For `ITTFL`, this comes down to searching the derivation text for the phrase `"[DS.DSDECOD] = 'RANDOMIZED'"`: if it is found, "randomized" is pre-selected as the default in the prompt shown above; otherwise "enrolled" is offered as the default instead. The programmer is still shown the question and can override it, but for the large majority of studies that follow Roche's standard specification wording, accepting every default by pressing Enter is enough to move through the whole session.
+
+# Reflections and Further Work
 
 Looking back, we do not think we could have jumped straight from static templates (Chapter 1) to fully dynamic, DAP-driven generation (Chapter 3) even if we had known from the outset that this was where we would end up. {scriptr}'s chunk/call abstraction had to exist, be trusted by developers, and prove itself on hand-selected templates first, before it was a credible foundation for a tool that selects and assembles chunks *automatically* on a programmer's behalf. Each stage of this journey was also, deliberately, a fully **deterministic** piece of automation: a given DAP specification and a given set of question answers will always produce the same generated script, byte for byte. We think this was the right choice for this problem, precisely because ADaM programming sits inside a heavily regulated, audit-sensitive process where reproducibility and explainability of the generated artefact matter as much as the artefact's correctness. That said, we have not yet rigorously quantified the maintenance-time or error-rate savings this evolution has produced; doing so properly — for example, by comparing defect rates or review turnaround time on studies built from dynamically generated templates against a matched set built from static ones — remains an open piece of further work, and one we would encourage other companies pursuing a similar path to plan for from the start, rather than treating it as an afterthought as we did.
 
 Looking forward, we see two natural next steps. The first is incremental: extending {admiralrochetools}'s domain coverage and question sophistication, and continuing to fold learnings from real studies back into the chunk library and question definitions as edge cases surface. The second is more speculative, and is where large language models plausibly enter this pipeline for the first time: today, the DAP-specification-parsing helpers described in Section 6 rely on pattern-matching known phrases in free-text derivation descriptions, which is robust but brittle to phrasing the pattern-matcher was not written to expect. An LLM-based reader of the same free-text specification could plausibly resolve a wider range of phrasing with less maintenance of hand-written patterns, while still leaving the final, deterministic assembly step — the part that actually needs to be reproducible and auditable — entirely in {scriptr}'s hands. We would treat this as an enhancement to the specification-reading step only, not a replacement for the deterministic generation engine underneath it.
 
-# RECOMMENDATIONS
+# Recommendations
 
 For any organisation considering a similar journey, our main recommendations, in order of how early we think they matter, are:
 
-1. **Do not skip straight to dynamic generation.** Build the reusable-chunk abstraction ({scriptr}'s role in our story) first, on a codebase your developers already trust, before trying to automate the selection of chunks. Trust in the underlying building blocks is what makes the final, more automated layer credible.
-2. **Decide submission scope early, and let it drive package boundaries.** Our {admiralroche}/{admiralrochetools} split (Section 5) happened somewhat after the fact; had we designed for the "does this need to be in a submission's software environment?" question from the start, we could have made that split earlier and more cleanly.
+1. **Do not skip straight to dynamic generation.** Build the reusable-chunk abstraction (`{scriptr}`'s role in our story) first, on a codebase your developers already trust, before trying to automate the selection of chunks. Trust in the underlying building blocks is what makes the final, more automated layer credible.
+2. **Decide submission scope early, and let it drive package boundaries.** Our `{admiralroche}`/`{admiralrochetools}` split (Section 5) happened somewhat after the fact; had we designed for the "does this need to be in a submission's software environment?" question from the start, we could have made that split earlier and more cleanly.
 3. **Make comments and documentation first-class in your assembly engine**, not an afterthought bolted on later. Generated code that a human reviewer cannot understand at a glance will not be trusted, no matter how correct it is.
 4. **Keep the generation step deterministic**, and keep an audit trail of what was asked and answered. Both properties cost little to build in from the start and are expensive to retrofit later, and both matter a great deal in a regulated environment.
 5. **Read your own specifications before asking your programmers anything.** The single biggest reduction in manual effort in our pipeline did not come from generating code faster — it came from not asking a question the DAP specification had already answered.
 
-# CONCLUSION
+# Conclusion
 
-The journey from static ADaM templates, through {scriptr}'s reusable chunk abstraction, to {admiralrochetools}'s fully dynamic, specification-driven template generation reflects a fairly ordinary software engineering instinct — notice duplication, abstract it, then automate the selection of the abstraction — applied to a domain, regulated clinical trial programming, where that instinct is not always the first one people reach for. We hope that by setting out both the narrative (in the accompanying talk) and the internal mechanics (in this paper) we have given other sponsor companies a genuine starting point for making the same journey, whether or not they choose the same tools to make it.
+The journey from static ADaM templates, through `{scriptr}`'s reusable chunk abstraction, to `{admiralrochetools}`'s fully dynamic, specification-driven template generation reflects a fairly ordinary software engineering instinct — notice duplication, abstract it, then automate the selection of the abstraction — applied to a domain, regulated clinical trial programming, where that instinct is not always the first one people reach for. We hope that by setting out both the narrative (in the accompanying talk) and the internal mechanics (in this paper) we have given other sponsor companies a genuine starting point for making the same journey, whether or not they choose the same tools to make it.
 
-# ACKNOWLEDGEMENTS
+# Acknowledgements
 
-We are especially grateful to Stefan Bundfuss, the lead developer of both {admiralroche} and {scriptr}, whose design work is the foundation this entire talk and paper describe. We also thank our wider Roche statistical programming community for continuing to build, test and refine the templates and chunk libraries described here.
-
-# RECOMMENDED READING
-
-- Farrugia, R. (2024). *{admiral} - from open source through to company implementation*. PHUSE EU Connect 2024, Paper OS05.
-- Mancini, E. (2024). *Two hats, one noggin: Working as a developer and as a user of the {admiral} R package for creating ADaMs*. PHUSE EU Connect 2024, Paper OS07.
-- The pharmaverse family of R packages: <https://pharmaverse.org>
-- {admiral} package documentation and Programming Strategy vignette: <https://pharmaverse.github.io/admiral/>
+We are especially grateful to Stefan Bundfuss, a lead developer of both `{admiralroche}` and `{scriptr}`, whose design work is the foundation this entire talk and paper describe. We also thank our wider Roche statistical programming community for continuing to build, test and refine the templates and chunk libraries described here.
 
 # CONTACT INFORMATION
 
