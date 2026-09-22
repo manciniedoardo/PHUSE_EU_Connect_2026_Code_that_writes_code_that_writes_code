@@ -3,10 +3,10 @@ title: |
   | Paper SM11
   | Code that writes code that writes code?!
   | Creating ADaMs in R with {admiralroche}
-author:
-  - Gordon Miller, Roche Products Ltd, Welwyn Garden City, UK
-  - Edoardo Mancini, Roche Products Ltd, Welwyn Garden City, UK
-  - Stefan Bundfuss, Roche Products Ltd, Welwyn Garden City, UK
+author: |
+  | Edoardo Mancini, Roche Products Ltd
+  | Stefan Bundfuss, Syneos Health
+  | Gordon Miller, Roche Products Ltd
 date: "PHUSE EU Connect 2026, Glasgow, UK"
 output:
   pdf_document:
@@ -441,19 +441,16 @@ We thank our wider Roche statistical programming community for continuing to bui
 
 Your comments and questions are valued and encouraged. Contact the authors at:
 
-Gordon Miller\
-Roche Products Ltd\
-Welwyn Garden City, UK\
-Email: gordon.miller@roche.com
-
 Edoardo Mancini\
 Roche Products Ltd\
-Welwyn Garden City, UK\
 Email: edoardo.mancini@roche.com
 
 Stefan Bundfuss\
-Roche Products Ltd\
-Welwyn Garden City, UK\
+Syneos Health
 Email: stefan.bundfuss@external.roche.com
+
+Gordon Miller\
+Roche Products Ltd\
+Email: gordon.miller@roche.com
 
 Any trademarks mentioned in this paper are the property of their respective owners.
