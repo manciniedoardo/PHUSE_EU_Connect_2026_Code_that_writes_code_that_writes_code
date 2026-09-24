@@ -411,6 +411,14 @@ use_adsl_template(
 
 Whenever specifications are supplied, `{admiralrochetools}` scans the free-text derivation description for each variable to try to infer an answer directly from it using keyword-matching techniques. For `ITTFL`, this comes down to searching the derivation text for the phrase `"[DS.DSDECOD] = 'RANDOMIZED'"`: if it is found, "randomized" is pre-selected as the default in the prompt shown above; otherwise "enrolled" is offered as the default instead. The programmer is still shown the question and can override it, but for the large majority of studies that follow Roche's standard specification wording, accepting every default by pressing Enter is enough to move through the whole session.
 
+# Time savings on the user and developer side
+
+The full dynamic template setup has been in use at Roche for several months, and the time savings are evident both from the user side and the developer side. 
+
+For a typical study and activity, users are now using dynamic templates to generate starting scripts for their ADaM dataset of choice, with those scripts a) already having the right options selected within them whenever a derivation choice has been made, e.g. selection of data sources to use for the derivation of last alive date `LSTALVDT` in `ADSL`, and b) already condensed to remove any code related to standard variables that are unneeded. Internal surveys and workflow analysis have shown that on average, the initial setup time (measured as the time required by a user to obtain a starting script satisfying a) and b)) has halved, with the most savings encountered for complex ADaMs such as the Response Analysis Dataset `ADRS`, where a lot of user choices are needed.
+
+On the developer side, the chunk/call abstraction has allowed the `{admiralrochetools}` team to deploy updates to templates much quicker, with updates to over 20 templates being possible by updating a single chunk or call template, rather than having to hunt down and edit each template individually.
+
 # Reflections and Further Work
 
 Looking back, it's clear that `{admiralroche}` could not have jumped straight from static templates (Stage 1) to fully dynamic, specification-driven generation (Chapter 3) even if we as developers had known from the outset that this was where we would end up. `{scriptr}`'s chunk/call abstraction had to exist, be trusted by developers, and prove itself on hand-selected templates first, before it was a credible foundation for a tool that selects and assembles chunks *automatically* on a programmer's behalf. Each stage of this journey was also, deliberately, a fully **deterministic** piece of automation: a given ADaM specification and a given set of question answers will always produce the same generated script, byte for byte. 
@@ -429,7 +437,7 @@ For any organisation considering a similar journey, here are our main recommenda
 
 # Conclusion
 
-The journey from static ADaM templates, through `{scriptr}`'s reusable chunk abstraction, to `{admiralrochetools}`'s fully dynamic, specification-driven template generation reflects a fairly ordinary software engineering instinct - notice duplication, abstract it, then automate the selection of the abstraction - applied to the regulated clinical programming environemnt, where that instinct is not always the first one programmer have. We hope that by charting `{admiralroche}`'s ADaM template journey, we have provided a genuine starting point for making the same journey, whether or not you choose the same tools to make it.
+The journey from static ADaM templates, through `{scriptr}`'s reusable chunk abstraction, to `{admiralrochetools}`'s fully dynamic, specification-driven template generation reflects a fairly ordinary software engineering instinct - notice duplication, abstract it, then automate the selection of the abstraction - applied to the regulated clinical programming environment, where that instinct is not always the first one programmer have. We hope that by charting `{admiralroche}`'s ADaM template journey, we have provided a genuine starting point for making the same journey, whether or not you choose the same tools to make it.
 
 \newpage
 
@@ -446,7 +454,7 @@ Roche Products Ltd\
 Email: edoardo.mancini@roche.com
 
 Stefan Bundfuss\
-Syneos Health
+Syneos Health\
 Email: stefan.bundfuss@external.roche.com
 
 Gordon Miller\
