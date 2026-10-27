@@ -19,15 +19,16 @@ output:
     toc: true
     toc_depth: 2
     number_sections: true
-fontsize: 11pt
-geometry: margin=0.9in
+    css: styles.css
+fontsize: 10pt
+geometry: margin=0.7in
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
-# Abstract
+# ABSTRACT
 
 Writing template code is just as much an art as it is a skill, requiring balancing solid starting points with flexibility for custom adaptations. For developers, maintaining templates while ensuring consistency and eliminating repetitive tasks is a constant struggle. 
 
@@ -35,9 +36,9 @@ Over the past years, Roche's fast transition to R for ADaM programming challenge
 We will discuss our challenges and learnings, sharing experiences on reduced maintenance and time saved. Join us to see why, in the quest for the ultimate ADaM template, deterministic automation trumps probabilistic AI.
 
 
-# Introduction
+# INTRODUCTION
 
-The `{admiral}` package and its wider "pharmaverse" ecosystem [pharmaverse.org] are the **de facto** standard tools to create Analysis Data Model (ADaM) datasets in R. `{admiral}` deliberately does not attempt to be a complete, drop-in solution; rather, it provides composable, reusable derivation functions and leaves the programmer to decide *which* functions to use, *how* to use them, *in what order* to do so, and most importantly, *where* to intersperse sponsor/study-specific code. This is by design, since the fine details of how any given company or study implements the ADaM standards inevitably vary.
+The `{admiral}` package and its wider "pharmaverse" ecosystem ([pharmaverse.org](https://pharmaverse.org)) are the **de facto** standard tools to create Analysis Data Model (ADaM) datasets in R. `{admiral}` deliberately does not attempt to be a complete, drop-in solution; rather, it provides composable, reusable derivation functions and leaves the programmer to decide *which* functions to use, *how* to use them, *in what order* to do so, and most importantly, *where* to intersperse sponsor/study-specific code. This is by design, since the fine details of how any given company or study implements the ADaM standards inevitably vary.
 
 This paradigm has led some sponsors to build company-specific extensions on top of `{admiral}`, which can both:
 
@@ -50,9 +51,9 @@ For a presentation and paper discussing Roche's own journey setting up `{admiral
 2. **Code that writes code.** An internal R package, `{scriptr}`, that abstracts the common building blocks shared across those templates into reusable, parameterised "chunks" which are then assembled programmatically rather than copy-pasted.
 3. **Code that writes code that writes code.** A companion package, `{admiralrochetools}`, that combines `{scriptr}`'s assembly engine with a short interactive questionnaire and a study's own specification, so that running a single function produces a template already tailored to that study's derivation choices, with no manual search-and-replace required.
 
-# Background: Why {admiralroche} and ADaM templates?
+# BACKGROUND: WHY {admiralroche} AND ADAM TEMPLATES?
 
-## {admiralroche} covers the ~10% of Roche's ADaM standards that {admiral} does not
+## {admiralroche} COVERS THE ~10% OF ROCHE'S ADAM STANDARDS THAT {admiral} DOES NOT
 
 ```{r fig1, echo=FALSE, results="asis", fig.cap="Code split across ADaM programs at Roche"}
 if (knitr::is_latex_output()) {
@@ -70,7 +71,7 @@ if (knitr::is_latex_output()) {
 
 Heuristically, it has been observed that for most given ADaM datasets at Roche (and most likely for other sponsors too), around 80% of the variable and parameter derivations are covered by functions from the `{admiral}` package, such as `derive_vars_dt()`, `derive_vars_merged()`, `derive_param_exist_flag()`. A further ~10% is manually programmed code that is genuinely specific to an individual study, and has no business being standardised into any shared package. The remaining ~10% is where `{admiralroche}` comes in: it reflects Roche's own interpretation of the ADaM standards, for example, which imputation techniques to apply, sponsor-specific variables and parameters, helper code to interact with Roche's chosen statistical computing environment (SCE), and glue code for other pharmaverse packages such as `{metatools}`, `{metacore}` and `{xportr}` which Roche has chosen to use as part of its ADaM pipeline.
 
-## Accessing ADaM templates
+## ACCESSING ADAM TEMPLATES
 
 Even before any sponsor extension enters the picture, `{admiral}` already makes starting a new ADaM program straightforward, via `use_ad_template()`. Calling it with a domain name and `package = "admiral"` generates a ready-made, generic template script for that domain directly into the user's project:
 
@@ -95,7 +96,7 @@ admiral::use_ad_template(
 )
 ```
 
-## Features of sponsor ADaM templates
+## FEATURES OF SPONSOR ADAM TEMPLATES
 
 As expected, `{admiralroche}`'s ADaM templates showcase a healthy mix of standard `{admiral}` code customised to fit Roche's requirements, calls to `{admiralroche}` functions, and placeholders for study-specific code. Below are examples of each from the `ADSL` template.
 
@@ -139,11 +140,11 @@ Study-specific treatment arm derivation placeholders:
   mutate(TRT01P = ARM, TRT01A = ACTARM) %>%
 ```
 
-# Stage 1: *Code* - static ADaM templates
+# STAGE 1: *CODE* - STATIC ADAM TEMPLATES
 
 Throughout its first releases, `{admiralroche}` put the `use_ad_template()` mechanism introduced in Section 3 to direct use: it shipped a static, human-written ADaM template script for every domain covered by Roche's global standards - `ADSL`, `ADAE`, `ADVS`, `ADLB`, and so on — each one hard-coding Roche's standard interpretation of that domain's derivations and mixing together the `{admiral}` calls, `{admiralroche}` helper functions, and study-specific placeholders illustrated in Section 3.3. A programmer starting a new study would call `use_ad_template()` function (with the appropriate arguments), receive a copy of the relevant script in their project, and edit it by hand to fit the study at hand.
 
-## Pros and cons of the static template approach
+## PROS AND CONS OF THE STATIC TEMPLATE APPROACH
 
 This approach was the simplest possible way to package company-specific ADaM logic, and its strengths followed directly from that simplicity:
 
@@ -169,13 +170,13 @@ knitr::include_graphics("figures/duplication_risks.png")
 
 This second point turned out to be the more serious limitation in practice. Any refactor, bug fix, or change in a Roche standard had to be propagated by hand into every template that contained the affected block, and so there was always a risk that a fix may land in some templates but be missed in others. 
 
-# Stage 2: *Code that writes code* - Abstracting away the ADaM templates
+# STAGE 2: *CODE THAT WRITES CODE* - ABSTRACTING AWAY THE ADAM TEMPLATES
 
-## The problem: duplication without a shared abstraction
+## THE PROBLEM: DUPLICATION WITHOUT A SHARED ABSTRACTION
 
 As hinted, the static-template approach was a good starting point, but had no mechanism for saying "this block of code is used, with minor variations, in these six templates - treat it as one thing." Every template was an independent, flat R script, so the *only* way to reuse logic across templates was to copy it. To circumvent this issue, the `{admiralroche}` team developed an internal helper package, `{scriptr}`. This package introduced a proper abstraction layer between "a reusable unit of ADaM logic" and "a finished script" so that changes to the underlying logic only ever needed to be made in one place.
 
-## `{scriptr}`'s core data model: "chunks" and "calls"
+## `{scriptr}`'S CORE DATA MODEL: "CHUNKS" AND "CALLS"
 
 `{scriptr}` organises code around two first-class objects, referred to internally as **chunks** and **calls**. A chunk is a general-purpose, reusable block of R code (i.e. anything from a single derivation call to a short multi-line sequence) registered once via `add_chunk()`. A call is the more specialised case of a chunk that wraps exactly one function invocation (typically an `{admiral}` derivation function), registered via `add_call()`. Calls are intended to be inserted into pipes and therefore their definition doesn't include the input and output objects.
 
@@ -205,13 +206,13 @@ add_call(
 
 As written, `derive_aendt` is only useful for the one template that happens to need `AENDT` derived with "first"-day imputation - exactly the kind of near-identical, hand-copied block described in Section 5.1. The templating syntax introduced below is what turns a call like this into something reusable across every template that needs the same derivation, with only the details that genuinely differ left open as placeholders.
 
-## `{scriptr}`'s templating syntax
+## `{scriptr}`'S TEMPLATING SYNTAX
 
 The templating mechanism is deliberately built on vocabulary borrowed from `{rlang}`'s quasiquotation, since many R developers already have some intuition for it. A chunk or call template can mark a placeholder for single-value substitution with a `++` sigil (mirroring `!!`), and a placeholder for multi-value, "splice in a list" substitution with `+++` (mirroring `!!!`). When a template is instantiated, values are supplied for these placeholders.
 
 Two helper functions cover the common cases of building up dynamic text inside a template: `glue_sym()` constructs a syntactically valid R symbol from string fragments (for example, gluing a variable stem and a suffix into a single identifier), while `glue_char()` builds a dynamic character string, and can lean on `{cli}`'s pluralisation helpers so that, for example, a comment can correctly say "the following variable" versus "the following variables" depending on how many were substituted. 
 
-Returning to the `AENDT` example, `derive_aendt` can be rewritten as a call template with two placeholders: `++prefix`, the variable stem shared by the `*ENDTC` source and the derived `*ENDT` variable, and `++imputation`, the one detail that genuinely differs between the `ADCM` and `ADMH` templates. `glue_sym()` builds the `dtc` argument's symbol from `++prefix` at instantiation time, and `defaults` supplies the value used whenever a caller does not override it:
+Returning to the `AENDT` example, `derive_aendt` can be rewritten as a call template with two placeholders: `++prefix`, the SDTM variable stem that identifies the `*ENDTC` source variable (e.g. `"CM"` for `CMENDTC` in ADCM, `"MH"` for `MHENDTC` in ADMH), and `++imputation`, the one detail that genuinely differs between the `ADCM` and `ADMH` templates. The output analysis variable is always `AENDT` and so `new_vars_prefix` is hardcoded as `"AEN"`. `glue_sym()` builds the `dtc` argument's symbol from `++prefix` at instantiation time, and `defaults` supplies the value used whenever a caller does not override it:
 
 ```r
 add_call_template(
@@ -246,13 +247,13 @@ insert_calls(
 
 A change to how `AENDT` should be derived - a new imputation rule, an extra argument, a bug fix - now only ever needs to be made once, in the `derive_end_dt` template, rather than hunted down across every template file that copied it by hand.
 
-## Assembly: from chunks to a finished script
+## ASSEMBLY: FROM CHUNKS TO A FINISHED SCRIPT
 
 Registering chunks and calls is only half of `{scriptr}`; the other half is turning a selection of them into an actual, well-formatted R script. `insert_chunks()` takes a list of chunk identifiers (conventionally captured as unevaluated expressions via `exprs()`, so that argument names can double as chunk identifiers) and inlines them, in the order given, into the developing script. `insert_calls()` does the equivalent job for calls, and additionally understands the notion of an "input" and an "output" - letting a developer specify, for instance, that a chain of calls should thread the same dataset through each derivation step in turn, producing a pipe-style sequence rather than a flat list of independent statements. 
 
 The top-level entry point that ties this together is `execute()`, which takes an accumulated set of chunk/call insertions (as well as any arbitrary code that doesn't fit in a chunk/call) together with a target filename and produces a finished `.R` file. Before writing that file, `{scriptr}` passes the assembled code through `{styler}`'s `style_code()`, using a house style configuration, so that the generated script is indistinguishable in formatting from one a Roche programmer would have written by hand — consistent indentation, consistent pipe placement, and no tell-tale artefacts of programmatic generation.
 
-Putting the `load_ae` chunk and the `derive_end_dt` call template from the previous two sections together, generating the relevant section of the `ADCM` template is a single `execute()` call:
+Putting the `load_cm` chunk and the `derive_end_dt` call template from the previous two sections together, generating the relevant section of the `ADCM` template is a single `execute()` call:
 
 ```r
 execute(
@@ -262,7 +263,7 @@ execute(
     adcm <- cm
     insert_calls(
       input = adcm,
-      ids = exprs(derive_end_dt(prefix = "AEN")),
+      ids = exprs(derive_end_dt(prefix = "CM")),
       output = adcm
     )
   },
@@ -273,13 +274,13 @@ execute(
 which writes the following, already-formatted script to `ad_adcm.R`, ready for a programmer to open and continue building on:
 
 ```r
-ae <- read_parquet("data/sdtm/ae.parquet")
+cm <- read_parquet("data/sdtm/cm.parquet")
 
 adcm <- cm
 adcm <- adcm %>%
   derive_vars_dt(
     new_vars_prefix = "AEN",
-    dtc = AEENDTC,
+    dtc = CMENDTC,
     highest_imputation = "M",
     date_imputation = "first"
   )
@@ -287,7 +288,7 @@ adcm <- adcm %>%
 
 The equivalent call for `ADMH` differs only in the arguments passed to `derive_end_dt()`, yet both scripts are generated from the same underlying chunk and call template — precisely the "write it once, generate it everywhere" property that static templates could not offer.
 
-## Accessing and browsing existing chunks and calls
+## ACCESSING AND BROWSING EXISTING CHUNKS AND CALLS
 
 Registered chunks and calls live in an in-memory store attached to the current R session, and `{scriptr}` provides `get_reactable()` to browse the full contents of that store interactively (rendered as a searchable table), which is invaluable when a developer is trying to find out whether a chunk implementing a given piece of logic already exists before writing a new one. Because different packages may want to maintain their own independent chunk libraries, `{scriptr}` supports a **federated store** pattern: `set_scriptr_sources()` lets a downstream package (such as `{admiralrochetools}`, discussed in Section 6) register its own chunk source alongside or instead of the default one, and `get_source_env()` resolves which environment a given lookup should use. The excerpt below, taken from `{admiralrochetools}`'s own template-generation code, shows this in practice: it points `{scriptr}` at its own package namespace *and* at a private, internal environment holding Roche's confidential chunk and call library, so that the two can be searched together as if they were a single store:
 
@@ -295,7 +296,7 @@ Registered chunks and calls live in an in-memory store attached to the current R
 set_scriptr_sources(list("admiralrochetools", admiralroche_scriptr_private))
 ```
 
-# Creating a new `{admiralrochetools}` package to the store template machinery
+# CREATING A NEW `{admiralrochetools}` PACKAGE TO STORE THE TEMPLATE MACHINERY
 
 Once the `{scriptr}` machinery was in place to help abstract and generalise the `{admiralroche}` ADaM templates, a decision was made to split `{admiralroche}` into two:
 
@@ -316,9 +317,9 @@ admiral::use_ad_template(
 )
 ```
 
-# Stage 3 - *Code that writes code that writes code* - Dynamic template generation
+# STAGE 3 - *CODE THAT WRITES CODE THAT WRITES CODE* - DYNAMIC TEMPLATE GENERATION
 
-## From "assemble what a developer selects" to "ask the programmer exactly what they need"!
+## FROM "ASSEMBLE WHAT A DEVELOPER SELECTS" TO "ASK THE PROGRAMMER EXACTLY WHAT THEY NEED"!
 
 `{scriptr}` chunk-based abstract templates improved the maintenance of Roche ADaM templates from a developer perspective. From a user standpoint though, nothing had changed, since the end result of calling `use_ad_template("adxx", package = "admiralrochetools")` was still always the same static ADaM template, which would still need editing in cases where the user chose less popular options for any derivations. In other words, for any given ADaM dataset, there was still no real way to offer *options*.
 
@@ -326,7 +327,7 @@ However, there was scope to go further: the library of chunks in `{admiralrochet
 
 The following section details how we set up dynamic template-creating functions `use_adxx_template()` in `{admiralrochetools}` to accomplish just this goal.
 
-## Worked example: `use_adsl_template()`
+## WORKED EXAMPLE: `use_adsl_template()`
 
 Every ADaM domain for which `{admiralrochetools}` has made available dynamic template functions (at the time of writing: `ADSL`, `ADAE`, `ADEG`, `ADEX`, `ADHY`, `ADLB`, `ADRS`, `ADTTE` and `ADVS`) has its own `use_adxx_template()` function. We will take `use_adsl_template()` as a running example for the rest of this section: calling it with nothing more than a destination path is enough to trigger the full question-and-answer session that ends with a study-specific `ADSL` template being written to disk.
 
@@ -379,7 +380,7 @@ derive_var_merged_exist_flag(
 
 Every other optional `ADSL` derivation - which reference date to age at, whether an interim analysis data-cut date is required, which sources feed into last known alive date (`LSTALVDT`) - is resolved through the same call-and-response mechanism, with `read_user_choice()`'s `multiple_values` option letting a programmer pick several sources at once where more than one applies.
 
-## Allowing for multiple implmementation options
+## ALLOWING FOR MULTIPLE IMPLEMENTATION OPTIONS
 
 Functionality exists to cater for Roche derivations where more than one implementation option is permitted by the Roche ADaM standards. Internally, a small family of CLI helper functions handle this behaviour. One of these functions is `read_user_choice()`, which renders a titled list of options and reads back the programmer's selection, optionally allowing several choices to be picked at once (`multiple_values = TRUE`) or a shortcut for "all of them" (`allow_all = TRUE`). Another is `read_user_input()`, which is paired with a validator such as `accept_integer()` or `accept_integer_list()`, and used instead whenever the answer is a number rather than a choice from a fixed list (for example, the number of study drugs feeding into `AEWITHFL`), immediately re-prompting the programmer if the typed value fails validation. Some examples from `use_adsl_template()` are shown below:
 
@@ -398,7 +399,7 @@ How many study drugs are used (`AEWITHFL`)?
 Number of study drugs [default (GDSR): 1]: 5
 ```
 
-## Feeding in a specification instead of answering every question
+## FEEDING IN A SPECIFICATION INSTEAD OF ANSWERING EVERY QUESTION
 
 Asking a programmer a question their study's own specification has already answered is a wasted effort, so `use_adsl_template()` (and its sibling `use_*_template()` functions) accepts an optional specification argument, `dap_m3` (DAP M3 short for "Data Analysis Plan, Module 3", a.k.a. the ADaM specifications). These are expected in JSON format.
 
@@ -411,7 +412,7 @@ use_adsl_template(
 
 Whenever specifications are supplied, `{admiralrochetools}` scans the free-text derivation description for each variable to try to infer an answer directly from it using keyword-matching techniques. For `ITTFL`, this comes down to searching the derivation text for the phrase `"[DS.DSDECOD] = 'RANDOMIZED'"`: if it is found, "randomized" is pre-selected as the default in the prompt shown above; otherwise "enrolled" is offered as the default instead. The programmer is still shown the question and can override it, but for the large majority of studies that follow Roche's standard specification wording, accepting every default by pressing Enter is enough to move through the whole session.
 
-# Time savings on the user and developer side
+# TIME SAVINGS ON THE USER AND DEVELOPER SIDE
 
 The full dynamic template setup has been in use at Roche for several months, and the time savings are evident both from the user side and the developer side. 
 
@@ -419,15 +420,15 @@ For a typical study and activity, users are now using dynamic templates to gener
 
 On the developer side, the chunk/call abstraction has allowed the `{admiralrochetools}` team to deploy updates to templates much quicker, with updates to over 20 templates being possible by updating a single chunk or call template, rather than having to hunt down and edit each template individually.
 
-# Reflections and Further Work
+# REFLECTIONS AND FURTHER WORK
 
-Looking back, it's clear that `{admiralroche}` could not have jumped straight from static templates (Stage 1) to fully dynamic, specification-driven generation (Chapter 3) even if we as developers had known from the outset that this was where we would end up. `{scriptr}`'s chunk/call abstraction had to exist, be trusted by developers, and prove itself on hand-selected templates first, before it was a credible foundation for a tool that selects and assembles chunks *automatically* on a programmer's behalf. Each stage of this journey was also, deliberately, a fully **deterministic** piece of automation: a given ADaM specification and a given set of question answers will always produce the same generated script, byte for byte. 
+Looking back, it's clear that `{admiralroche}` could not have jumped straight from static templates (Stage 1) to fully dynamic, specification-driven generation (Stage 3) even if we as developers had known from the outset that this was where we would end up. `{scriptr}`'s chunk/call abstraction had to exist, be trusted by developers, and prove itself on hand-selected templates first, before it was a credible foundation for a tool that selects and assembles chunks *automatically* on a programmer's behalf. Each stage of this journey was also, deliberately, a fully **deterministic** piece of automation: a given ADaM specification and a given set of question answers will always produce the same generated script, byte for byte. 
 
 Looking forward, we see two natural next steps. The first is incremental: extending `{admiralrochetools}`'s domain coverage and question sophistication, and continuing to fold learnings from real studies back into the chunk library and question definitions as edge cases surface. The second is more speculative, and is where large language models plausibly enter this pipeline for the first time: today, the specification-parsing helpers described in Stage 3 rely on pattern-matching known phrases in free-text derivation descriptions, which is robust but brittle to phrasing the pattern-matcher was not written to expect. An LLM-based reader of the same free-text specification could plausibly resolve a wider range of phrasing with less maintenance of hand-written patterns, while still leaving the final, deterministic assembly step — the part that actually needs to be reproducible and auditable — entirely in `{scriptr}`'s hands. We would treat this as an enhancement to the specification-reading step only, not a replacement for the deterministic generation engine underneath it.
 
 Finally, a lot of this infrastructure remains hidden to our Roche users behind the `{admiralrochetools}` package. We do see potential avenues that lead to exposing some of it to our more advanced users, allowing them to make their own chunks in order to maintain study-specifics at higher level such as across-molecule or therapuetic area.
 
-# Recommendations
+# RECOMMENDATIONS
 
 For any organisation considering a similar journey, here are our main recommendations as `{admiralroche}`/`{admiralrochetools}` developers.
 
@@ -435,30 +436,60 @@ For any organisation considering a similar journey, here are our main recommenda
 2. **Decide where your code will live early on** The `{admiralroche}`/`{admiralrochetools}` split happened somewhat after the fact; had we designed for the "does this need to be in a submission's software environment?" question from the start, we could have made that split earlier and more cleanly.
 3. **Keep the generation step deterministic**. The nature of ADaM means that you will likely find more success in automating derivations through ideas such as the "chunk library" and dynamically asking users what they require or inferring it from their specifications than attempting to have LLMs generate entire portions of ADaM scripts.
 
-# Conclusion
+# CONCLUSION
 
 The journey from static ADaM templates, through `{scriptr}`'s reusable chunk abstraction, to `{admiralrochetools}`'s fully dynamic, specification-driven template generation reflects a fairly ordinary software engineering instinct - notice duplication, abstract it, then automate the selection of the abstraction - applied to the regulated clinical programming environment, where that instinct is not always the first one programmer have. We hope that by charting `{admiralroche}`'s ADaM template journey, we have provided a genuine starting point for making the same journey, whether or not you choose the same tools to make it.
 
 \newpage
 
-# Acknowledgements
+# ACKNOWLEDGEMENTS
 
 We thank our wider Roche statistical programming community for continuing to build, test and refine the templates and chunk libraries described here, as well as Roche itself for allowing us to present on the topic.
 
-# Contact information
+# CONTACT INFORMATION
 
 Your comments and questions are valued and encouraged. Contact the authors at:
 
 Edoardo Mancini\
-Roche Products Ltd\
+Roche Products Ltd, UK\
 Email: edoardo.mancini@roche.com
 
 Stefan Bundfuss\
-Syneos Health\
+Syneos Health, Germany\
 Email: stefan.bundfuss@external.roche.com
 
 Gordon Miller\
-Roche Products Ltd\
+Roche Products Ltd, UK\
 Email: gordon.miller@roche.com
 
 Any trademarks mentioned in this paper are the property of their respective owners.
+
+# REFERENCES
+
+1. Pharmaverse. *pharmaverse: A curated set of R packages for Clinical Reporting in the Pharmaceutical Industry*. Available at: [https://pharmaverse.org](https://pharmaverse.org)
+
+2. Farrugia R (2024). *OS05: {admiral} – From Open Source Through to Company Implementation*. PHUSE US Connect 2024, Bethesda, MD, USA. [Presentation](https://phuse.s3.eu-central-1.amazonaws.com/Archive/2024/Connect/US/Bethesda/PRE_OS05.pdf) | [Paper](https://phuse.s3.eu-central-1.amazonaws.com/Archive/2024/Connect/US/Bethesda/PAP_OS05.pdf)
+
+3. Pharmaverse. *admiral: ADaM in R Asset Library*. R package. Available at: [https://pharmaverse.github.io/admiral/](https://pharmaverse.github.io/admiral/)
+
+4. Roche. *admiralroche: Roche-specific admiral extension*. Internal R package.
+
+5. Roche. *admiralrochetools: Tools and ADaM templates for Roche ADaM programming*. Internal R package.
+
+6. Roche. *scriptr: Programmatic R Script Generation*. Internal R package.
+
+7. Pharmaverse. *metatools: Enable the Use and Check of Standard Dataset and Variable Labels*. R package. Available at: [https://pharmaverse.github.io/metatools/](https://pharmaverse.github.io/metatools/)
+
+8. Pharmaverse. *metacore: A Centralized Metadata Object*. R package. Available at: [https://pharmaverse.github.io/metacore/](https://pharmaverse.github.io/metacore/)
+
+9. Pharmaverse. *xportr: Utilities to Output CDISC ADaM XPT Files*. R package. Available at: [https://pharmaverse.github.io/xportr/](https://pharmaverse.github.io/xportr/)
+
+10. Wickham H, Henry L. *rlang: Functions for Base Types and Core R and 'Tidyverse' Features*. R package. Available at: [https://rlang.r-lib.org/](https://rlang.r-lib.org/)
+
+11. Müller K, Walthert L. *styler: Non-Invasive Pretty Printing of R Code*. R package. Available at: [https://styler.r-lib.org/](https://styler.r-lib.org/)
+
+12. Csárdi G. *cli: Helpers for Developing Command Line Interfaces*. R package. Available at: [https://cli.r-lib.org/](https://cli.r-lib.org/)
+
+# AI Declaration
+
+AI tools (Google Gemini, Claude) were used to aid the writing of this paper, as well as to review it and correct typos/formatting. 
